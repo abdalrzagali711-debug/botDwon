@@ -23,7 +23,6 @@ def run():
 def welcome(message):
     markup = types.InlineKeyboardMarkup(row_width=2)
     # إنشاء الأزرار
-    btn1 = types.InlineKeyboardButton("🎥 يوتيوب", callback_data="yt")
     btn2 = types.InlineKeyboardButton("📸 إنستغرام", callback_data="inst")
     btn3 = types.InlineKeyboardButton("🎵 تيك توك", callback_data="tk")
     btn4 = types.InlineKeyboardButton("👻 سناب شات", callback_data="snp")
@@ -39,8 +38,7 @@ def welcome(message):
 # --- 2. معالجة ضغطات الأزرار ---
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
-    if call.data == "yt":
-        bot.edit_message_text("📥 أرسل الآن رابط فيديو اليوتيوب:", call.message.chat.id, call.message.message_id)
+
     elif call.data == "inst":
         bot.edit_message_text("📥 أرسل الآن رابط فيديو الإنستغرام:", call.message.chat.id, call.message.message_id)
     elif call.data == "tk":
@@ -53,7 +51,7 @@ def callback_inline(call):
 def download_all(message):
     url = message.text
     # التأكد أن الرابط يحتوي على كلمات من المنصات المدعومة
-    platforms = ["youtube", "youtu.be", "instagram", "tiktok", "snapchat"]
+    platforms = [ "youtu.be", "instagram", "tiktok", "snapchat"]
     if not any(p in url.lower() for p in platforms):
         bot.reply_to(message, "⚠️ الرجاء إرسال رابط صحيح من المنصات المدعومة.")
         return
@@ -69,9 +67,7 @@ def download_all(message):
             'no_warnings': True,
         }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            file_path = ydl.prepare_filename(info)
+       
 
         with open(file_path, 'rb') as video:
             bot.send_video(message.chat.id, video, caption="✅ تم التحميل بنجاح!")
@@ -87,4 +83,5 @@ def download_all(message):
 if __name__ == "__main__":
     if not os.path.exists('downloads'): os.makedirs('downloads')
     Thread(target=lambda: bot.infinity_polling(skip_pending=True)).start()
+
     run()
