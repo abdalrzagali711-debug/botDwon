@@ -18,56 +18,62 @@ def run():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- 1. الرسالة الترحيبية مع الأزرار ---
+# --- دالة إنشاء القائمة الرئيسية ---
+def main_menu():
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    # تم حذف زر اليوتيوب بناءً على طلبك
+    btn1 = types.InlineKeyboardButton("📸 إنستغرام", callback_data="inst")
+    btn2 = types.InlineKeyboardButton("🎵 تيك توك", callback_data="tk")
+    btn3 = types.InlineKeyboardButton("👻 سناب شات", callback_data="snp")
+    markup.add(btn1, btn2, btn3)
+    return markup
+
+# --- 1. الرسالة الترحيبية ---
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    # إنشاء الأزرار
-    btn2 = types.InlineKeyboardButton("📸 إنستغرام", callback_data="inst")
-    btn3 = types.InlineKeyboardButton("🎵 تيك توك", callback_data="tk")
-    btn4 = types.InlineKeyboardButton("👻 سناب شات", callback_data="snp")
-    
-    markup.add(btn1, btn2, btn3, btn4)
-    
     welcome_text = (
-        f"👋 أهلاً بك يا {message.from_user.first_name} في بوت التحميل الشامل!\n\n"
-        "🚀 اختر المنصة التي تريد التحميل منها من الأزرار أدناه:"
+        f"👋 أهلاً بك يا {message.from_user.first_name}!\n\n"
+        "🚀 اختر المنصة التي تريد التحميل منها:"
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
+    bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu())
 
-# --- 2. معالجة ضغطات الأزرار ---
+# --- 2. معالجة الأزرار والرجوع ---
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
+    if call.data == "main_menu":
+        # زر الرجوع للقائمة الرئيسية
+        bot.edit_message_text("🚀 اختر المنصة التي تريد التحميل منها:", 
+                              call.message.chat.id, call.message.message_id, 
+                              reply_markup=main_menu())
+    else:
+        # عند اختيار منصة، تظهر رسالة طلب الرابط مع زر الرجوع
+        back_markup = types.InlineKeyboardMarkup()
+        back_markup.add(types.InlineKeyboardButton("⬅️ رجوع للقائمة الرئيسية", callback_data="main_menu"))
+        
+        platforms = {"inst": "إنستغرام", "tk": "تيك توك", "snp": "سناب شات"}
+        bot.edit_message_text(f"📥 أرسل الآن رابط {platforms[call.data]}:", 
+                              call.message.chat.id, call.message.message_id, 
+                              reply_markup=back_markup)
 
-    elif call.data == "inst":
-        bot.edit_message_text("📥 أرسل الآن رابط فيديو الإنستغرام:", call.message.chat.id, call.message.message_id)
-    elif call.data == "tk":
-        bot.edit_message_text("📥 أرسل الآن رابط فيديو التيك توك:", call.message.chat.id, call.message.message_id)
-    elif call.data == "snp":
-        bot.edit_message_text("📥 أرسل الآن رابط فيديو السناب شات:", call.message.chat.id, call.message.message_id)
-
-# --- 3. منطق التحميل الشامل ---
+# --- 3. منطق التحميل الشامل (بدون يوتيوب) ---
 @bot.message_handler(func=lambda m: True)
-def download_all(message):
+def download_logic(message):
     url = message.text
-    # التأكد أن الرابط يحتوي على كلمات من المنصات المدعومة
-    platforms = [ "youtu.be", "instagram", "tiktok", "snapchat"]
-    if not any(p in url.lower() for p in platforms):
-        bot.reply_to(message, "⚠️ الرجاء إرسال رابط صحيح من المنصات المدعومة.")
+    # التحقق من أن الرابط ليس يوتيوب
+    if "youtube" in url.lower() or "youtu.be" in url.lower():
+        bot.reply_to(message, "⚠️ عذراً، تحميل اليوتيوب غير مدعوم في هذا البوت.")
         return
 
-    msg = bot.reply_to(message, "⏳ جاري المعالجة والتحميل... يرجى الانتظار.")
-    
+    msg = bot.reply_to(message, "⏳ جاري التحميل... يرجى الانتظار.")
     try:
-        # إعدادات yt-dlp الذكية (تدعم أغلب المنصات)
         ydl_opts = {
-            'format': 'best[filesize<45M]/best', # محاولة البقاء تحت 45 ميجا
+            'format': 'best[filesize<48M]/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'quiet': True,
-            'no_warnings': True,
+            'quiet': True
         }
-
-       
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            file_path = ydl.prepare_filename(info)
 
         with open(file_path, 'rb') as video:
             bot.send_video(message.chat.id, video, caption="✅ تم التحميل بنجاح!")
@@ -76,12 +82,11 @@ def download_all(message):
         bot.delete_message(message.chat.id, msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text("❌ فشل التحميل. قد يكون الحجم كبيراً جداً أو الرابط خاصاً.", message.chat.id, msg.message_id)
-        print(f"Error: {e}")
+        bot.edit_message_text("❌ فشل التحميل. تأكد من أن الرابط صحيح وحجمه أقل من 50MB.", 
+                              message.chat.id, msg.message_id)
 
 # --- التشغيل ---
 if __name__ == "__main__":
     if not os.path.exists('downloads'): os.makedirs('downloads')
     Thread(target=lambda: bot.infinity_polling(skip_pending=True)).start()
-
     run()
