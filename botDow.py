@@ -8,7 +8,7 @@ from threading import Thread
 
 # --- إعدادات البوت ---
 TOKEN = "7954952627:AAEM7OZahtpHnUhUZqM8RBNlYbjUsyOcTng"
-ADMIN_ID = 5524416062 # !!! استبدل هذا الرقم بـ ID حسابك في تليجرام !!!
+ADMIN_ID =5524416062 # !!! استبدل هذا الرقم بـ ID حسابك في تليجرام !!!
 bot = telebot.TeleBot(TOKEN)
 
 # ملف بسيط لتخزين البيانات (كبديل مؤقت لقاعدة البيانات)
