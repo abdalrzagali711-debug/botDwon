@@ -2,134 +2,126 @@ import telebot
 from telebot import types
 import yt_dlp
 import os
-import json
+import pymongo
 from flask import Flask
 from threading import Thread
 
-# --- إعدادات البوت ---
+# --- إعدادات البوت وقاعدة البيانات ---
 TOKEN = "7954952627:AAEM7OZahtpHnUhUZqM8RBNlYbjUsyOcTng"
-ADMIN_ID =5524416062 # !!! استبدل هذا الرقم بـ ID حسابك في تليجرام !!!
+# استبدل <db_password> بكلمة مرور المستخدم abdalrzagDB
+MONGO_URI = "mongodb+srv://abdalrzagDB:10010207966##@cluster0.fighoyv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+ADMIN_ID = 5524416062  # استبدل هذا الرقم بـ ID حسابك في تليجرام
+
 bot = telebot.TeleBot(TOKEN)
 
-# ملف بسيط لتخزين البيانات (كبديل مؤقت لقاعدة البيانات)
-DATA_FILE = "bot_data.json"
-
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f: return json.load(f)
-    return {"users": [], "groups": []}
-
-def save_data(data):
-    with open(DATA_FILE, "w") as f: json.dump(data, f)
+# الاتصال بـ MongoDB (قاعدة بيانات منفصلة لهذا البوت)
+client = pymongo.MongoClient(MONGO_URI)
+db = client["VideoDownloader_Bot"] 
+users_col = db["users"]
+groups_col = db["groups"]
 
 # --- سيرفر ويب لـ Render ---
 app = Flask('')
 @app.route('/')
-def home(): return "Bot is Running"
+def home(): return "البوت يعمل بنجاح ✅"
 
 def run():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- تسجيل المستخدمين والمجموعات ---
+# --- نظام تسجيل المستخدمين والمجموعات ---
 def register(message):
-    data = load_data()
     chat_id = message.chat.id
     if message.chat.type == 'private':
-        if chat_id not in data["users"]:
-            data["users"].append(chat_id)
-            save_data(data)
+        if not users_col.find_one({"user_id": chat_id}):
+            users_col.insert_one({
+                "user_id": chat_id, 
+                "first_name": message.from_user.first_name,
+                "username": message.from_user.username
+            })
     else:
-        if chat_id not in data["groups"]:
-            data["groups"].append(chat_id)
-            save_data(data)
+        if not groups_col.find_one({"group_id": chat_id}):
+            groups_col.insert_one({
+                "group_id": chat_id, 
+                "title": message.chat.title
+            })
 
-# --- لوحة التحكم (للمطور فقط) ---
+# --- لوحة تحكم المطور ---
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
     if message.from_user.id == ADMIN_ID:
-        data = load_data()
-        stats = (f"📊 **إحصائيات البوت:**\n\n"
-                 f"👤 عدد المستخدمين: {len(data['users'])}\n"
-                 f"👥 عدد المجموعات: {len(data['groups'])}\n"
-                 f"📁 إجمالي النشاط: {len(data['users']) + len(data['groups'])}")
+        u_count = users_col.count_documents({})
+        g_count = groups_col.count_documents({})
+        stats = (f"📊 إحصائيات البوت من MongoDB:\n\n"
+                 f"👤 عدد المستخدمين: {u_count}\n"
+                 f"👥 عدد المجموعات: {g_count}")
         bot.reply_to(message, stats, parse_mode="Markdown")
     else:
         bot.reply_to(message, "❌ هذا الأمر خاص بالمطور فقط.")
 
-# --- القائمة الرئيسية ---
-def main_menu():
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton("📸 إنستغرام", callback_data="inst")
-    btn2 = types.InlineKeyboardButton("🎵 تيك توك", callback_data="tk")
-    btn3 = types.InlineKeyboardButton("👻 سناب شات", callback_data="snp")
-    markup.add(btn1, btn2, btn3)
-    return markup
-
+# --- القائمة الترحيبية ---
 @bot.message_handler(commands=['start'])
 def welcome(message):
     register(message)
-    welcome_text = f"👋 أهلاً بك يا {message.from_user.first_name}!\n🚀 اختر المنصة للتحميل:"
-    bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu())
+    welcome_text = f"👋 أهلاً بك يا {message.from_user.first_name}!\n🚀 أرسل رابط الفيديو (إنستقرام، تيك توك، سناب) وسأقوم بتحميله لك فوراً."
+    bot.send_message(message.chat.id, welcome_text)
 
 # --- معالجة الروابط واختيار النوع ---
-@bot.message_handler(func=lambda m: m.text.startswith("http"))
+@bot.message_handler(func=lambda m: m.text and m.text.startswith("http"))
 def handle_link(message):
     register(message)
     url = message.text
     if "youtube" in url.lower() or "youtu.be" in url.lower():
-        bot.reply_to(message, "⚠️ اليوتيوب غير مدعوم.")
+        bot.reply_to(message, "⚠️ عذراً، اليوتيوب غير مدعوم حالياً.")
         return
 
     markup = types.InlineKeyboardMarkup()
     btn_vid = types.InlineKeyboardButton("📹 فيديو", callback_data=f"vid|{url}")
-    btn_aud = types.InlineKeyboardButton("🎵 صوت (MP3)", callback_data=f"aud|{url}")
+    btn_aud = types.InlineKeyboardButton("🎵 صوت MP3", callback_data=f"aud|{url}")
     markup.add(btn_vid, btn_aud)
     
-    bot.reply_to(message, "اختر الصيغة المطلوبة:", reply_markup=markup)
+    bot.reply_to(message, "اختر الصيغة المطلوبة للتحميل:", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
-    if "|" in call.data:
-        action, url = call.data.split("|")
-        bot.edit_message_text("⏳ جاري المعالجة... يرجى الانتظار.", call.message.chat.id, call.message.message_id)
-        download_and_send(call.message, url, action)
-    elif call.data == "main_menu":
-        bot.edit_message_text("🚀 اختر المنصة:", call.message.chat.id, call.message.message_id, reply_markup=main_menu())
+@bot.callback_query_handler(func=lambda call: "|" in call.data)
+def download_callback(call):
+    mode, url = call.data.split("|")
+    bot.edit_message_text("⏳ جاري المعالجة والتحميل... يرجى الانتظار.", call.message.chat.id, call.message.message_id)
+    
+    # إعدادات yt-dlp المتطورة لتجنب حظر Render
+    ydl_opts = {
+        'outtmpl': 'downloads/%(id)s.%(ext)s',
+        'quiet': True,
+        'no_warnings': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    }
 
-# --- دالة التحميل والإرسال ---
-def download_and_send(message, url, mode):
+    if mode == "aud":
+        ydl_opts.update({
+            'format': 'bestaudio/best',
+            'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}]
+        })
+    else:
+        ydl_opts['format'] = 'best'
+
     try:
-        ydl_opts = {
-            'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'quiet': True,
-            'max_filesize': 48 * 1024 * 1024 # 48MB
-        }
-        
-        if mode == "aud":
-            ydl_opts['format'] = 'bestaudio/best'
-            ydl_opts['postprocessors'] = [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}]
-        else:
-            ydl_opts['format'] = 'best'
-
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
             if mode == "aud": file_path = file_path.rsplit('.', 1)[0] + ".mp3"
-
-        with open(file_path, 'rb') as f:
+            with open(file_path, 'rb') as f:
             if mode == "vid":
-                bot.send_video(message.chat.id, f, caption="✅ تم تحميل الفيديو بنجاح!")
+                bot.send_video(call.message.chat.id, f, caption="✅ تم التحميل بواسطة بوتك!")
             else:
-                bot.send_audio(message.chat.id, f, caption="✅ تم تحميل الصوت بنجاح!")
+                bot.send_audio(call.message.chat.id, f, caption="✅ تم استخراج الصوت!")
 
         if os.path.exists(file_path): os.remove(file_path)
-        bot.delete_message(message.chat.id, message.message_id)
+        bot.delete_message(call.message.chat.id, call.message.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ خطأ: قد يكون الملف كبيراً جداً أو الرابط غير مدعوم.", message.chat.id, message.message_id)
+        bot.edit_message_text(f"❌ فشل التحميل. قد يكون الرابط خاصاً أو محظوراً في خوادم Render.", call.message.chat.id, call.message.message_id)
 
+# --- تشغيل البوت ---
 if __name__ == "__main__":
     if not os.path.exists('downloads'): os.makedirs('downloads')
-    Thread(target=lambda: bot.infinity_polling(skip_pending=True)).start()
-    run()
+    Thread(target=run).start()
+    bot.infinity_polling(skip_pending=True)
