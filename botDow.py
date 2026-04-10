@@ -7,7 +7,7 @@ from flask import Flask
 from threading import Thread
 
 # --- إعدادات البوت وقاعدة البيانات ---
-TOKEN = "7954952627:AAEM7OZahtpHnUhUZqM8RBNlYbjUsyOcTng"
+TOKEN = "7954952627:AAEXIZerk_CRxI940lWq98RY0gHLSPI1wu4"
 # استبدل <db_password> بكلمة مرور المستخدم abdalrzagDB
 MONGO_URI = "mongodb+srv://abdalrzagDB:10010207966##@cluster0.fighoyv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 ADMIN_ID = 5524416062  # استبدل هذا الرقم بـ ID حسابك في تليجرام
