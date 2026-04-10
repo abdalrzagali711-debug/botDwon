@@ -8,13 +8,12 @@ from threading import Thread
 
 # --- إعدادات البوت وقاعدة البيانات ---
 TOKEN = "7954952627:AAEXIZerk_CRxI940lWq98RY0gHLSPI1wu4"
-# استبدل <db_password> بكلمة مرور المستخدم abdalrzagDB
 MONGO_URI = "mongodb+srv://abdalrzagDB:10010207966##@cluster0.fighoyv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-ADMIN_ID = 5524416062  # استبدل هذا الرقم بـ ID حسابك في تليجرام
+ADMIN_ID = 5524416062 
 
 bot = telebot.TeleBot(TOKEN)
 
-# الاتصال بـ MongoDB (قاعدة بيانات منفصلة لهذا البوت)
+# الاتصال بـ MongoDB
 client = pymongo.MongoClient(MONGO_URI)
 db = client["VideoDownloader_Bot"] 
 users_col = db["users"]
@@ -87,7 +86,6 @@ def download_callback(call):
     mode, url = call.data.split("|")
     bot.edit_message_text("⏳ جاري المعالجة والتحميل... يرجى الانتظار.", call.message.chat.id, call.message.message_id)
     
-    # إعدادات yt-dlp المتطورة لتجنب حظر Render
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'quiet': True,
@@ -107,21 +105,27 @@ def download_callback(call):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
-            if mode == "aud": file_path = file_path.rsplit('.', 1)[0] + ".mp3"
+            if mode == "aud": 
+                file_path = file_path.rsplit('.', 1)[0] + ".mp3"
+            
+            # --- هنا تم تصحيح الإزاحة (Indentation) ---
             with open(file_path, 'rb') as f:
-            if mode == "vid":
-                bot.send_video(call.message.chat.id, f, caption="✅ تم التحميل بواسطة بوتك!")
-            else:
-                bot.send_audio(call.message.chat.id, f, caption="✅ تم استخراج الصوت!")
+                if mode == "vid":
+                    bot.send_video(call.message.chat.id, f, caption="✅ تم التحميل بواسطة البوت!")
+                else:
+                    bot.send_audio(call.message.chat.id, f, caption="✅ تم استخراج الصوت!")
 
-        if os.path.exists(file_path): os.remove(file_path)
+        if os.path.exists(file_path): 
+            os.remove(file_path)
         bot.delete_message(call.message.chat.id, call.message.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ فشل التحميل. قد يكون الرابط خاصاً أو محظوراً في خوادم Render.", call.message.chat.id, call.message.message_id)
+        bot.edit_message_text(f"❌ فشل التحميل. يرجى التأكد من الرابط أو المحاولة لاحقاً.", call.message.chat.id, call.message.message_id)
 
 # --- تشغيل البوت ---
 if __name__ == "__main__":
-    if not os.path.exists('downloads'): os.makedirs('downloads')
+    if not os.path.exists('downloads'): 
+        os.makedirs('downloads')
     Thread(target=run).start()
     bot.infinity_polling(skip_pending=True)
+
